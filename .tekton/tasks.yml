@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  description: Clean the shared workspace before cloning the repository.
+  workspaces:
+    - name: source
+  steps:
+    - name: clean
+      image: alpine:3.20
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+        echo "Workspace cleaned"
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: nose
+spec:
+  description: Run the Python unit tests in the shared source workspace.
+  workspaces:
+    - name: source
+  steps:
+    - name: run-tests
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m pip install --upgrade pip wheel
+        python -m pip install -r requirements.txt
+        nosetests -v --with-spec --spec-color
+        coverage report -m
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: flake8
+spec:
+  description: Run the Python flake8 linting checks.
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        set -eu
+        python -m pip install flake8==4.0.1
+        flake8 service tests --count --show-source --statistics
